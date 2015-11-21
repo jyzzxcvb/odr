@@ -21,18 +21,42 @@ main(int argc, char **argv)
 	/*------------- Obtain Interfaces Starts -------------*/
 	struct hwa_info	*hwa, *hwahead;
 	struct sockaddr	*sa;
-	char   *ptr;
+	char   *ptr; 
 	int    i, prflag;
 	struct sockaddr_ll addr;
 	printf("\n");
+	char eth0IP[SIZE];
+	struct sockaddr_ll interfaces[VMNUMBER];
+	int interfaceNumber=0;
+	int interfaceFDs[VMNUMBER];
+	fd_set              allset,rset;
+	int maxfd;
 
+	FD_ZERO(&rset);
+  	FD_ZERO(&allset);
+  	maxfd=0;
 	for (hwahead = hwa = Get_hw_addrs(); hwa != NULL; hwa = hwa->hwa_next) {
 		
 		printf("%s :%s", hwa->if_name, ((hwa->ip_alias) == IP_ALIAS) ? " (alias)\n" : "\n");
 		
-		if ( (sa = hwa->ip_addr) != NULL)
-			printf("         IP addr = %s\n", Sock_ntop_host(sa, sizeof(*sa)));
+		if (strcmp(hwa->if_name, "lo") == 0) 
+			continue;
 
+//		sa = hwa->ip_addr;	
+        
+        //determine which VM node 
+        eth0IP=Sock_ntop_host( (struct sockaddr*)hwa->ip_addr, sizeof(struct sockaddr* ) ); 
+        if (strcmp(hwa->if_name, "eth0") == 0 ){
+        	for (i=0;i<VMNUMBER;i++)
+        	{
+        		if (strcmp(vms[i],eth0IP)==0){
+        			//currentVM=i;
+        			printf("Current VM node is %d, the VM IP is %s\n",i+1,eth0IP);
+        			break;
+        		}
+        	}
+        	continue;
+        }
 
 		prflag = 0;
 		i = 0;
@@ -54,21 +78,64 @@ main(int argc, char **argv)
 
 		printf("\n         interface index = %d\n\n", hwa->if_index);
 
-		addr.sll_family=PF_PACKET;
-		addr.sll_protocol=htons(PROTOCOL_VALUE);
-		addr.sll_ifindex=hwa->if_index;
-		memcpy(addr.sll_addr, hwa->if_haddr, ETH_ALEN);
+		interfaces[interfaceNumber].sll_family=PF_PACKET;
+		interfaces[interfaceNumber].sll_protocol=htons(PROTOCOL_VALUE);
+		interfaces[interfaceNumber].sll_ifindex=hwa->if_index;
+		memcpy(interfaces[interfaceNumber].sll_addr, hwa->if_haddr, ETH_ALEN);
 		
 		//Create a PF_PACKET socket for every interface
-		sockFD=Socket(PF_PACKET,SOCK_RAW,htons(PROTOCOL_VALUE));  //set the value in header file ?
-		Bind(sockFD, (SA *) addr, sizeof(addr));
+		interfaceFDs[interfaceNumber]=Socket(PF_PACKET,SOCK_RAW,htons(PROTOCOL_VALUE));  //set the value in header file ?
+		Bind(interfaceFDs[interfaceNumber], (SA *) &interfaces[interfaceNumber], sizeof(SA*));
+		FD_SET(interfaceFDs[interfaceNumber], &allset);
+		maxfd=interfaceFDs[interfaceNumber]>maxfd?interfaceFDs[interfaceNumber]:maxfd;
+		
+		interfaceNumber++;
 	}
 
 	free_hwa_info(hwahead);
+    
+	printf("%d sockets are binded for all of the interfaces\n",interfaceNumber);
 
 	/*------------- Obtain Interfaces Ends -------------*/
 
 
 
+
+	/*------------- Create UNIX DOMAIN Socket Starts-------------*/
+
+	int sockFD;
+	socklen_t len;
+	struct sockaddr_un addr1, addr2;
+	
+	sockfd = Socket(AF_LOCAL, SOCK_STREAM, 0); 
+	unlink(ODR_PATH); /* OK if this fails */
+	bzero(&addr1, sizeof(addr1));
+	addr1.sun_family = AF_LOCAL;
+	strncpy(addr1.sun_path, ODR_PATH, sizeof(addr1.sun_path) - 1); 
+	Bind(sockfd, (SA *) &addr1, SUN_LEN(&addr1));
+	printf("ODR Socket was binded with path name: %s\n",ODR_PATH);
+	FD_SET(sockfd, &allset);
+	maxfd=sockfd>maxfd?sockfd:maxfd;
+	/*------------- Create UNIX DOMAIN Socket ENDS-------------*/
+
+
+	/*------------- Server Starts -------------*/
+	int status;
+	maxfd++;
+	for (;;)
+	{
+		rset= allset;
+    	status = select(maxfd , &rset, NULL, NULL, NULL);
+    	if (status == -1) {
+        	if (errno == EINTR)
+            	continue;
+        	err_sys("select error");
+    	}
+
+    	if (FD_ISSET(sockfd,&rset)){
+    		
+    	}	
+    
+	}
 	exit(0)
 }
