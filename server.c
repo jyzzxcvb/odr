@@ -1,91 +1,64 @@
 #include "a3.h"
 
-
-//抄的
 int main(int argc, const char * argv[]) {
-	printf("\nWELCOME! THIS IS SERVER SERVICE\n\n");
+	printf("Server running\n");
 
-	struct hwa_info *hwa;
+	struct hwa_info *hwa, *tmp;
     struct sockaddr *sa;
-	int node;
-	int index;
-
-	if((hwa=get_hw_addrs())==NULL) {
-
-		perror("SERVER: Failed to get interface information for this node\n");
-		exit(1);
-	}
-
-	sa=hwa->hwa_next->ip_addr;
-
-	//get node index
-	for(index=0; index<10; index++) {
-
-		if(strcmp(Sock_ntop_host(sa, sizeof(*sa)), vm_addr[index])==0) {
-		
-			node=index+1;
-			break;
-		}
-	}
-	printf("You are on the VM%d node now\n\n", node);
-
 	int sockfd;
 	struct sockaddr_un srvaddr;
-
-	//UNIX domain socket to communicate with local ODR
-	if((sockfd=socket(AF_LOCAL, SOCK_DGRAM, 0))<0) {
-
-		perror("SERVER: Failed to open socket\n");
+	if((hwa=get_hw_addrs())==NULL) {
+		printf("get_hw_addrs error\n");
 		exit(1);
 	}
+	int cur;
+	int i;
+	for (tmp = hwa; tmp != NULL; tmp = tmp->hwa_next) {
+		if (!strcmp(tmp->if_name, "eth0") && tmp->ip_addr != NULL) {
+		  	sa = tmp->ip_addr;
+			for(i=0; i<10; i++) {
+				if(strcmp(vms[i], Sock_ntop_host(sa, sizeof(*sa)))==0) {
+					cur=i+1;
+					break;
+				}
+			}
+			break;
+		}
+	}	
+	printf("Current VM: %d\n", cur);
 
+	if((sockfd=socket(AF_LOCAL, SOCK_DGRAM, 0))<0) {
+		printf("cannot create socket\n");
+		exit(1);
+	}
 	bzero(&srvaddr, sizeof(srvaddr));
 	srvaddr.sun_family=AF_LOCAL;
-	//server well-known sun_path
-	strcpy(srvaddr.sun_path, "240411");
-
+	strcpy(srvaddr.sun_path, SERV_ADDR);
     unlink(srvaddr.sun_path);
-
 	if(bind(sockfd, (SA *) &srvaddr, sizeof(srvaddr))<0) {
-
-		perror("SERVER: Failed to bind socket\n");
+		printf("bind socket error\n");
 		exit(1);
 	}
-	printf("Server UNIX domain socket was open and binded\n\n");
-
 	int recv;	
 	int src_port;
-	char src_addr[15];	
-	char sendmsg[ETH_FRAME_LEN];
-	char recvmsg[ETH_FRAME_LEN];
-	time_t ticks;
+	char src_addr[16];	
+	char recBuf[MSG_SIZE];
+	char sendBuf[MSG_SIZE];
+	time_t tv;
 
 	while(1) {
-
-		//receive request from local ODR	
-		printf("Waiting for request......\n\n");				
-		msg_recv(sockfd, recvmsg, src_addr, &src_port);
-
-		//get source node number of request
-		for(index=0; index<10; index++) {
-
-			if(strcmp(src_addr, vm_addr[index])==0) {
-		
-				recv=index+1;
+		msg_recv(sockfd, recBuf, src_addr, &src_port);
+		for(i=0; i<10; i++) {
+			if(strcmp(vms[i], src_addr) == 0) {
+				recv=i+1;
 				break;
 			}
 		}
-		printf("Server at node VM%d received request from VM%d\n", node, recv);
-		printf("Received message: %s\n\n", recvmsg);
-		
-		ticks=time(NULL);       
-        snprintf(sendmsg, sizeof(sendmsg), "%.24s\r\n", ctime(&ticks));
-        
-        //send reply to local ODR
-		msg_send(sockfd, vm_addr[recv-1], src_port, sendmsg, 0);
-		printf("Server at node VM%d responded to request from VM%d\n\n", node, recv);
+		printf("Server at VM%d received client msg from VM%d\n", cur, recv);
+		tv=time(NULL);       
+        snprintf(sendBuf, sizeof(sendBuf), "%.24s\r\n", ctime(&tv));
+		msg_send(sockfd, vm_addr[recv-1], src_port, sendBuf, 0);
+		printf("Reply sent from VM%d to VM%d\n", cur, recv);
 	}
-
-	unlink(srvaddr.sun_path);
 	return 0; 
 }

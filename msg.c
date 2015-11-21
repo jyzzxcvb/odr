@@ -1,9 +1,7 @@
-#include "unp.h"
 #include "a3.h"
-#define MSG_SIZE 1000
 
 int msg_send(int sockfd, char *dest_addr, int dest_port, char *msg, int flag) {
-    char dat[MSEND_SIZE];
+    char dat[MSG_SIZE];
 
     sprintf(dat, "%s;%d;%d;%s", dest_addr, dest_port, flag, msg);
     printf("\nSending Stream : %s", dat);

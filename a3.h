@@ -3,6 +3,7 @@
 #include <time.h>
 
 #define MSG_SIZE 1000
+#define SERV_ADDR "serv_addr"
 
 //抄的
 struct interfaceList{
