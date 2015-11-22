@@ -161,9 +161,9 @@ main(int argc, char **argv)
 				header->type=htonl(2);
 
 				//application payload ODR protocol message
-				strcpy(load->src_addr, vm_addr[node-1]);
+				strcpy(load->src_addr, eth0IP);
 				strcpy(load->dst_addr, dst_addr);
-				load->src_port=htonl(5000);
+				load->src_port=htonl(5000); //?? 
 				load->dst_port=htonl(dst_port);
 				load->hop_cnt=htonl(0);
 				load->len=htonl(sizeof(message));
