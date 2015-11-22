@@ -73,7 +73,7 @@ int main(int argc, char **argv){
 			rep->hop_cnt += 1;
 
 			//retransmit RREP
-			if(sendPacket(frame, send_if_addr, (void *)rep, 1, rep->dst_addr, rep->src_addr) != 1)
+			if(sendPacket(frame, send_if_addr, (void *)rep, 1, rep->dst_addr, rep->src_addr) == 1)
 				err_sys("Sending error!\n");
 
 			free(rep);
@@ -85,7 +85,7 @@ int main(int argc, char **argv){
 
 			char msg[7] = "HELLO!";
 			int port = 3000;
-			if(sendLocal(port_cnt,local_addr, odrfd, msg, port, rep->src_addr, rep->dst_port) != 1)
+			if(sendLocal(port_cnt,local_addr, odrfd, msg, port, rep->src_addr, rep->dst_port) == 1)
 				err_sys("Sending error!\n");
 
 			printf("RREP has been sent to local client\n");
@@ -100,14 +100,14 @@ int main(int argc, char **argv){
 
 		if(pl->dst_addr != vms[cur-1]){	//This is not destination node
 			printf("\nThis is not the destination node of app payload.\n\n");
-			if(sendPacket(frame, send_if_addr, (void *)pl, 2, pl->dst_addr, pl->src_addr) != 1)
+			if(sendPacket(frame, send_if_addr, (void *)pl, 2, pl->dst_addr, pl->src_addr) == 1)
 				err_sys("Sending error!\n");
 
 			free(pl);
 		}else{	//This is destination node
 			printf("\nThis is the destination node of app payload.\n\n");
 
-			if(sendLocal(port_cnt,local_addr, odrfd, pl->message, pl->src_port, pl->src_addr, pl->dst_port) != 1)
+			if(sendLocal(port_cnt,local_addr, odrfd, pl->message, pl->src_port, pl->src_addr, pl->dst_port) == 1)
 				err_sys("Sending error!\n");
 
 			printf("APP payload has been sent to local client\n");
@@ -152,7 +152,7 @@ int sendLocal(int port_cnt, struct sockaddr_un *local_addr, int odrfd, char msg[
 
 	if((length = sprintf(buf, "%s %s %d", msg, src_addr, port)) < 0){
 		err_sys("Format error!\n");
-		return 0;
+		return 1;
 	}
 
 	//find the local client the RREP is for
@@ -165,10 +165,10 @@ int sendLocal(int port_cnt, struct sockaddr_un *local_addr, int odrfd, char msg[
 						
 	if(sendto(odrfd, buf, length, 0, (SA *) local_addr, sizeof(*local_addr))<0){
 		err_sys("Sending error!\n");
-		return 0;
+		return 1;
 	}
 
-	return 1;
+	return 0;
 }
 
 int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *packet, int type, char dst_addr[], char src_addr[]){
@@ -204,11 +204,29 @@ int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *
 		printf("\nRREP has been prepared for sending.\n\n");
 	}else if(type == 1)
 	{
-		//RREP
+		//RREQ
 		printf("\nAPP payload has been prepared for sending.\n\n");
+	}else if(type == 0){
+		frame->dst_mac[0] = 0xff;
+		frame->dst_mac[1] = 0xff;
+		frame->dst_mac[2] = 0xff;
+		frame->dst_mac[3] = 0xff;
+		frame->dst_mac[4] = 0xff;
+		frame->dst_mac[5] = 0xff;
+
+		send_if_addr->sll_addr[0]=0xff;		
+		send_if_addr->sll_addr[1]=0xff;		
+		send_if_addr->sll_addr[2]=0xff;
+		send_if_addr->sll_addr[3]=0xff;
+		send_if_addr->sll_addr[4]=0xff;
+		send_if_addr->sll_addr[5]=0xff;
+
+		//RREQ floods
+		return 0;
+
 	}else{
 		err_sys("Type error!\n");
-		return 0;
+		return 1;
 	}
 
 	for(n=0; n<10; n++){
@@ -227,5 +245,5 @@ int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *
 	else
 		printf("ODR at node vm%d: %s, sending frame, src:vm%d dest:%s\n\n", cur, src_addr, cur, dst_addr);
 
-	return 1;
+	return 0;
 }
