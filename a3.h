@@ -3,8 +3,16 @@
 #include <time.h>
 
 #define MSG_SIZE 1000
-#define SERV_ADDR "serv_addr"
+#define SERV_PATH "serv_addr"
+#define SERV_PORT 5000
 
+#define ODR_PATH "odr_addr"
+#define ODR_PORT 5050
+
+#define PROTOCOL_NO 0xaacd
+#define ADDR_LEN 16
+
+#define PAYLOAD_LEN 100
 //抄的
 struct interfaceList{
 	int idx;
