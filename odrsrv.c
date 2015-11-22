@@ -47,8 +47,120 @@ struct payload {
 	char message[30];
 };
 
-int main(int argc, char **argv)
-{
+int update_table(char src_addr, int flag, int hop_count, struct eth_frame *frame, int index);
+int sendLocal(int port_cnt, struct sockaddr_un *local_addr, int odrfd, char msg[], int port, char src_addr[], int dst_port);
+int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *packet, int type, char dst_addr[], char src_addr[]);
+
+struct sockaddr_ll if_addr[3];
+//local routing table
+struct routing_entry routing_table[10];
+//local port talbe
+struct port_entry port_table[10];
+
+int sendLocal(int port_cnt, struct sockaddr_un *local_addr, int odrfd, char msg[], int port, char src_addr[], int dst_port){
+	int length;
+	int frame_len = sizeof(struct eth_frame);
+	char buf[frame_len];
+
+	if((length = sprintf(buf, "%s %s %d", msg, src_addr, port)) < 0){
+		err_sys("Format error!\n");
+		return 0;
+	}
+
+	//find the local client the RREP is for
+	for(int i=0; i <= port_cnt; i++) {		
+		if(port_table[i].port == (dst_port)) {
+			local_addr->sun_path = port_table[i].sun_path;
+			break;
+		}
+	}
+						
+	if(sendto(odrfd, buf, length, 0, (SA *) local_addr, sizeof(*local_addr))<0){
+		err_sys("Sending error!\n");
+		return 0;
+	}
+
+	return 1;
+}
+
+int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *packet, int type, char dst_addr[], char src_addr[]){
+	//prepare packet for retransmit
+
+	int temp_index = 0;
+	bzero(frame, sizeof(struct eth_frame));
+
+	frame->protocol_no = PROTO;
+	frame->type = type;
+
+	for(int n=0; n<10; n++) {
+		if(dst_addr == routing_table[n].dst_addr) {
+			memcpy(frame->dst_mac, routing_table[n].next_hop, ETH_ALEN);
+			temp_index = routing_table[n].outgoing_if-3;
+			memcpy(frame->src_mac, if_addr[temp_index].sll_addr, ETH_ALEN);
+			break;
+		}
+	}
+
+	bzero(send_if_addr, sizeof(struct sockaddr_ll));
+
+	send_if_addr->sll_family = PF_PACKET;
+	send_if_addr->sll_protocol = PROTO;
+	send_if_addr->sll_halen = ETH_ALEN;
+	send_if_addr->sll_addr[6] = 0x00;	//not used
+	send_if_addr->sll_addr[7] = 0x00;	//not used
+
+	if(type == 2){
+		//app payload
+		send_if_addr->sll_hatype=ARPHRD_ETHER;
+		send_if_addr->sll_pkttype=PACKET_OTHERHOST;
+		printf("\nRREP has been prepared for sending.\n\n");
+	}else if(type == 1)
+	{
+		//RREQ
+		printf("\nAPP payload has been prepared for sending.\n\n");
+	}else if(type == 0){
+		frame->dst_mac[0] = 0xff;
+		frame->dst_mac[1] = 0xff;
+		frame->dst_mac[2] = 0xff;
+		frame->dst_mac[3] = 0xff;
+		frame->dst_mac[4] = 0xff;
+		frame->dst_mac[5] = 0xff;
+
+		send_if_addr->sll_addr[0]=0xff;		
+		send_if_addr->sll_addr[1]=0xff;		
+		send_if_addr->sll_addr[2]=0xff;
+		send_if_addr->sll_addr[3]=0xff;
+		send_if_addr->sll_addr[4]=0xff;
+		send_if_addr->sll_addr[5]=0xff;
+
+		//RREQ floods
+		return 0;
+
+	}else{
+		err_sys("Type error!\n");
+		return 1;
+	}
+
+	for(n=0; n<10; n++){
+		if(dst_addr == routing_table[n].dst_addr) {
+			temp_index = routing_table[n].outgoing_if;
+			send_if_addr.sll_addr = frame->dst_mac;
+			send_if_addr.sll_ifindex=temp_index;
+			break;
+		}
+	}
+
+	memcpy((void *)(frame->payload), (void *)packet, sizeof(*packet));
+	temp_index = routing_table[n].outgoing_if-3;
+	if(sendto(if_fd[temp_index], frame, sizeof(*frame), 0, (SA *) send_if_addr, sizeof(*send_if_addr))<0)
+		err_sys("Sending error!\n");
+	else
+		printf("ODR at node vm%d: %s, sending frame, src:vm%d dest:%s\n\n", cur, src_addr, cur, dst_addr);
+
+	return 0;
+}
+
+int main(int argc, char **argv){
 	int staleness_time;
 	
 	/*------------- Check Parameter Starts -------------*/
@@ -86,7 +198,7 @@ int main(int argc, char **argv)
 		if (strcmp(hwa->if_name, "lo") == 0) 
 			continue;
 
-//		sa = hwa->ip_addr;	
+			//		sa = hwa->ip_addr;	
         
         //determine which VM node 
         eth0IP=Sock_ntop_host( (struct sockaddr*)hwa->ip_addr, sizeof(struct sockaddr* ) ); 
@@ -141,6 +253,131 @@ int main(int argc, char **argv)
 	printf("%d sockets are binded for all of the interfaces\n",interfaceNumber);
 
 	/*------------- Obtain Interfaces Ends -------------*/
+
+
+
+
+	/*------------- Create UNIX DOMAIN Socket Starts-------------*/
+
+	int sockFD;
+	socklen_t len;
+	struct sockaddr_un addr1;
+	
+	sockfd = Socket(AF_LOCAL, SOCK_STREAM, 0); 
+	unlink(ODR_PATH); /* OK if this fails */
+	bzero(&addr1, sizeof(addr1));
+	addr1.sun_family = AF_LOCAL;
+	strncpy(addr1.sun_path, ODR_PATH, sizeof(addr1.sun_path) - 1); 
+	Bind(sockfd, (SA *) &addr1, SUN_LEN(&addr1));
+	printf("ODR Socket was binded with path name: %s\n",ODR_PATH);
+	FD_SET(sockfd, &allset);
+	maxfd=sockfd>maxfd?sockfd:maxfd;
+	/*------------- Create UNIX DOMAIN Socket ENDS-------------*/
+
+
+	/*------------- Server Starts -------------*/
+	int status;
+	char buf[BUF_SIZE];
+	struct sockaddr_un addr;
+	socklen_t addrlen;
+	bzero(&addr, sizeof(addr));
+	addr.sun_family = AF_LOCAL;
+	maxfd++;
+	
+	for (;;)
+	{
+		rset= allset;
+    	status = select(maxfd , &rset, NULL, NULL, NULL);
+    	if (status == -1) {
+        	if (errno == EINTR)
+            	continue;
+        	err_sys("select error");
+    	}
+
+    	if (FD_ISSET(sockfd,&rset)){
+    		addrlen=sizeof(addr); 
+    		Recvfrom(sockfd,buf,BUF_SIZE,0,(SA *) &addr, &addrlen)
+    		printf("received new message from local: %s , with path name: %s\n",buf,addr.sun_path);
+    		sscanf(buf, "%s %d %s %d", dst_addr, &dst_port, message, &flag);
+    		if (addr.sun_path==SRV_PATH)
+    		{ 	//local server
+    			for (i=0;i<VMNUMBER;i++)
+    			{
+    				if (strcmp(routing_table[i].dst_addr,dst_addr)==0)
+    					break;
+    			}
+    			struct hdr *header=(struct hdr *) malloc(sizeof(struct hdr));				
+				struct payload *load=(struct payload *) malloc(sizeof(struct payload));
+				void *ether_frame=(void *) malloc(ETH_FRAME_LEN);
+					
+				//application payload header
+				memcpy(header->dst_mac, routing_table[i].next_hop, ETH_ALEN);
+				memcpy(header->src_mac, if_addr[routing_table[i].outgoing_if-3].sll_addr, ETH_ALEN);
+				header->proto=htons(PROTO);
+				header->type=htonl(2);
+
+				//application payload ODR protocol message
+				strcpy(load->src_addr, eth0IP);
+				strcpy(load->dst_addr, dst_addr);
+				load->src_port=htonl(5000); //?? 
+				load->dst_port=htonl(dst_port);
+				load->hop_cnt=htonl(0);
+				load->len=htonl(sizeof(message));
+				strcpy(load->message, message);
+				
+				//application payload Ethernet frame
+				memcpy((void *) ether_frame, (void *) header, sizeof(*header));
+				memcpy((void *) (ether_frame+sizeof(*header)), (void *) load, sizeof(*load));
+				printf("Application payload is ready to be sent out to ");
+				ptr=header->dst_mac;
+        		no=ETH_ALEN;
+				do {
+			
+            		printf("%.2x%s", *ptr++ & 0xff, (no==1)?"\n":":");
+        		} while(--no>0);
+
+				bzero(&send_if_addr, sizeof(struct sockaddr_ll));
+				send_if_addr.sll_family=PF_PACKET;
+				send_if_addr.sll_protocol=htons(PROTO);
+				send_if_addr.sll_ifindex=routing_table[number].outgoing_if;
+				send_if_addr.sll_halen=ETH_ALEN;
+				memcpy(send_if_addr.sll_addr, routing_table[number].next_hop, ETH_ALEN);
+				send_if_addr.sll_addr[6]=0x00;
+				send_if_addr.sll_addr[7]=0x00;
+
+				//application payload is sent
+				if(sendto(if_fd[routing_table[number].outgoing_if-3], ether_frame, sizeof(*header)+sizeof(*load), 0, 
+						(SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+
+					perror("ODR: Failed to send Ethernet frame throught interface socket\n");
+					exit(1);
+				}
+
+				printf("\nODR at node VM%d sent Ethernet frame, source VM%d, destination ", node, node);
+				ptr=send_if_addr.sll_addr;
+        		no=ETH_ALEN;
+				do {
+			
+            		printf("%.2x%s", *ptr++ & 0xff, (no==1)?"\n":":");
+        		} while(--no>0);
+				
+				printf("	ODR message type 2, source ip %s, destination ip %s\n", load->src_addr, load->dst_addr);
+
+				free(header);
+				free(load);
+				free(ether_frame);
+									
+
+    		}
+    		else
+    		{	//local client
+
+    		}
+
+    	}	
+    
+	}
+
 
 	/*------------- J -------------*/
 			for(index=0; index<if_cnt; index++) {
@@ -505,127 +742,63 @@ int main(int argc, char **argv)
 				}
 	/*------------- J -------------*/
 
+	/*------------- SOU -------------*/
+	if(frame->type == 1) {	//RREP received
+		printf("\n This is a RREP ethernet frame.\n\n");
+
+		struct RREP *rep = (struct RREP *)malloc(sizeof(struct RREP));
+		memcpy(rep, (void *)(frame->payload), sizeof(*rep));
+		if(update_table(rep->src_addr, rep->flag, rep->hopcnt, frame, index) != 1)
+			err_sys("Updating error!\n");
+
+		if(rep->dst_addr != vms[cur-1]){	//this is not destination node
+			printf("\nThis is not the destination node of RREP.\n\n");
+
+			rep->hop_cnt += 1;
+
+			//retransmit RREP
+			if(sendRREP(frame, send_if_addr, rep) != 1)
+				err_sys("Sending error!\n");
+
+			free(rep);
 
 
-	/*------------- Create UNIX DOMAIN Socket Starts-------------*/
+		}else{	//this is destination node
 
-	int sockFD;
-	socklen_t len;
-	struct sockaddr_un addr1;
-	
-	sockfd = Socket(AF_LOCAL, SOCK_STREAM, 0); 
-	unlink(ODR_PATH); /* OK if this fails */
-	bzero(&addr1, sizeof(addr1));
-	addr1.sun_family = AF_LOCAL;
-	strncpy(addr1.sun_path, ODR_PATH, sizeof(addr1.sun_path) - 1); 
-	Bind(sockfd, (SA *) &addr1, SUN_LEN(&addr1));
-	printf("ODR Socket was binded with path name: %s\n",ODR_PATH);
-	FD_SET(sockfd, &allset);
-	maxfd=sockfd>maxfd?sockfd:maxfd;
-	/*------------- Create UNIX DOMAIN Socket ENDS-------------*/
+			printf("\nThis is the destination node of RREP.\n\n");
 
+			char msg[7] = "HELLO!";
+			int port = 3000;
+			if(sendLocal(port_cnt,local_addr, odrfd, msg, port, rep->src_addr, rep->dst_port) != 1)
+				err_sys("Sending error!\n");
 
-	/*------------- Server Starts -------------*/
-	int status;
-	char buf[BUF_SIZE];
-	struct sockaddr_un addr;
-	socklen_t addrlen;
-	bzero(&addr, sizeof(addr));
-	addr.sun_family = AF_LOCAL;
-	maxfd++;
-	
-	for (;;)
-	{
-		rset= allset;
-    	status = select(maxfd , &rset, NULL, NULL, NULL);
-    	if (status == -1) {
-        	if (errno == EINTR)
-            	continue;
-        	err_sys("select error");
-    	}
+			printf("RREP has been sent to local client\n");
 
-    	if (FD_ISSET(sockfd,&rset)){
-    		addrlen=sizeof(addr); 
-    		Recvfrom(sockfd,buf,BUF_SIZE,0,(SA *) &addr, &addrlen)
-    		printf("received new message from local: %s , with path name: %s\n",buf,addr.sun_path);
-    		sscanf(buf, "%s %d %s %d", dst_addr, &dst_port, message, &flag);
-    		if (addr.sun_path==SRV_PATH)
-    		{ 	//local server
-    			for (i=0;i<VMNUMBER;i++)
-    			{
-    				if (strcmp(routing_table[i].dst_addr,dst_addr)==0)
-    					break;
-    			}
-    			struct hdr *header=(struct hdr *) malloc(sizeof(struct hdr));				
-				struct payload *load=(struct payload *) malloc(sizeof(struct payload));
-				void *ether_frame=(void *) malloc(ETH_FRAME_LEN);
-					
-				//application payload header
-				memcpy(header->dst_mac, routing_table[i].next_hop, ETH_ALEN);
-				memcpy(header->src_mac, if_addr[routing_table[i].outgoing_if-3].sll_addr, ETH_ALEN);
-				header->proto=htons(PROTO);
-				header->type=htonl(2);
+		}
 
-				//application payload ODR protocol message
-				strcpy(load->src_addr, eth0IP);
-				strcpy(load->dst_addr, dst_addr);
-				load->src_port=htonl(5000); //?? 
-				load->dst_port=htonl(dst_port);
-				load->hop_cnt=htonl(0);
-				load->len=htonl(sizeof(message));
-				strcpy(load->message, message);
-				
-				//application payload Ethernet frame
-				memcpy((void *) ether_frame, (void *) header, sizeof(*header));
-				memcpy((void *) (ether_frame+sizeof(*header)), (void *) load, sizeof(*load));
-				printf("Application payload is ready to be sent out to ");
-				ptr=header->dst_mac;
-        		no=ETH_ALEN;
-				do {
-			
-            		printf("%.2x%s", *ptr++ & 0xff, (no==1)?"\n":":");
-        		} while(--no>0);
+	}else{	//app payload
+		printf("\n This is a payload ethernet frame.\n\n");
 
-				bzero(&send_if_addr, sizeof(struct sockaddr_ll));
-				send_if_addr.sll_family=PF_PACKET;
-				send_if_addr.sll_protocol=htons(PROTO);
-				send_if_addr.sll_ifindex=routing_table[number].outgoing_if;
-				send_if_addr.sll_halen=ETH_ALEN;
-				memcpy(send_if_addr.sll_addr, routing_table[number].next_hop, ETH_ALEN);
-				send_if_addr.sll_addr[6]=0x00;
-				send_if_addr.sll_addr[7]=0x00;
+		struct payload *pl = (struct payload *)malloc(sizeof(struct payload));
+		memcpy(pl, (void *)(frame->payload), sizeof(*pl));
 
-				//application payload is sent
-				if(sendto(if_fd[routing_table[number].outgoing_if-3], ether_frame, sizeof(*header)+sizeof(*load), 0, 
-						(SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+		if(pl->dst_addr != vms[cur-1]){	//This is not destination node
+			printf("\nThis is not the destination node of app payload.\n\n");
+			if(sendRREP(frame, send_if_addr, pl) != 1)
+				err_sys("Sending error!\n");
 
-					perror("ODR: Failed to send Ethernet frame throught interface socket\n");
-					exit(1);
-				}
+			free(pl);
+		}else{	//This is destination node
+			printf("\nThis is the destination node of app payload.\n\n");
 
-				printf("\nODR at node VM%d sent Ethernet frame, source VM%d, destination ", node, node);
-				ptr=send_if_addr.sll_addr;
-        		no=ETH_ALEN;
-				do {
-			
-            		printf("%.2x%s", *ptr++ & 0xff, (no==1)?"\n":":");
-        		} while(--no>0);
-				
-				printf("	ODR message type 2, source ip %s, destination ip %s\n", load->src_addr, load->dst_addr);
+			if(sendLocal(port_cnt,local_addr, odrfd, pl->message, pl->src_port, pl->src_addr, pl->dst_port) != 1)
+				err_sys("Sending error!\n");
 
-				free(header);
-				free(load);
-				free(ether_frame);
-									
-
-    		}
-    		else
-    		{	//local client
-
-    		}
-
-    	}	
-    
+			printf("APP payload has been sent to local client\n");
+		}
 	}
+
+	free(frame);
+	/*------------- SOU -------------*/
 	exit(0)
 }
