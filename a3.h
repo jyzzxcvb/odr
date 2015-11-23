@@ -17,12 +17,19 @@
 #define ADDR_LEN 16
 
 #define PAYLOAD_LEN 100
-//抄的
-struct interfaceList{
-	int idx;
-	char ifaceName[120];
-	char ifaddr[16];
-	char haddr[6];
-	struct interfaceList *next;
-};
+#define VMNUMBER 10
+#define SIZE 255
+#define BUF_SIZE 255
 
+char* vms[]={
+	"130.245.156.21",
+	"130.245.156.22",
+	"130.245.156.23",
+	"130.245.156.24",
+	"130.245.156.25",
+	"130.245.156.26",
+	"130.245.156.27",
+	"130.245.156.28",
+	"130.245.156.29",
+	"130.245.156.20",
+	};

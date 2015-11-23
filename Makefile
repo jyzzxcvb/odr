@@ -15,8 +15,8 @@ server: server.o get_hw_addrs.o msg.o
 client: client.o get_hw_addrs.o msg.o
 	${CC} ${FLAGS} -o client client.o get_hw_addrs.o msg.o ${LIBS}
 
-odr: odr.o get_hw_addrs.o msg.o
-	${CC} ${FLAGS} -o odr odr.o get_hw_addrs.o msg.o ${LIBS}
+odr: odrsrv.o get_hw_addrs.o msg.o
+	${CC} ${FLAGS} -o odr odrsrv.o get_hw_addrs.o msg.o ${LIBS}
 
 msg.o: msg.c
 	${CC} ${CFLAGS} -c msg.c
@@ -27,13 +27,13 @@ client.o: client.c a3.h
 server.o: server.c a3.h
 	${CC} ${CFLAGS} -c server.c a3.h
 
-odr.o: odrsrv.c a3.h
+odrsrv.o: odrsrv.c a3.h
 	${CC} ${CFLAGS} -c odrsrv.c a3.h
 
 get_hw_addrs.o: get_hw_addrs.c
 	${CC} ${CFLAGS} -c get_hw_addrs.c
 
 clean:
-	rm get_hw_addrs.o server server.o client client.o odr.o msg.o
+	rm get_hw_addrs.o server server.o client client.o odrsrv.o msg.o
 
 
