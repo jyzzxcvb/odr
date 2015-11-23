@@ -4,6 +4,19 @@
 #include <linux/if_arp.h>
 #include <time.h>
 
+char* vms[] = {
+	"130.245.156.21",
+	"130.245.156.22",
+	"130.245.156.23",
+	"130.245.156.24",
+	"130.245.156.25",
+	"130.245.156.26",
+	"130.245.156.27",
+	"130.245.156.28",
+	"130.245.156.29",
+	"130.245.156.20",
+};
+
 struct routing_entry {
 	char dst_addr[ADDR_LEN];	
 	unsigned char next_hop[6];	
@@ -58,7 +71,7 @@ struct payload {
 };
 int broadcast_id =0;
 int port=6000;
-int update_table(char* src_addr, int flag, int hop_count, struct eth_frame *frame, int index);
+int update_table(char* src_addr, char* src_mac, int flag, int hop_count, int ind);
 int sendLocal(int port_cnt, struct sockaddr_un *local_addr, int odrfd, char msg[], int port, char src_addr[], int dst_port);
 int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *packet, int type, char dst_addr[], char src_addr[]);
 
@@ -177,6 +190,30 @@ int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *
 		printf("ODR at node vm%d: %s, sending frame, src:vm%d dest:%s\n\n", currentVM, src_addr, currentVM, dst_addr); //debug 4
 
 	return 0;
+}
+
+int update_table(char * src_addr, char* src_mac, int flag, int hop_cnt, int ind){
+	//add or update 'forward' path to destination node in routing table
+	int i;
+	for(i = 0; i < 10; i++) {
+		if(strcmp(routing_table[i].dst_addr, src_addr) == 0) {
+			//new route to destination is more efficient
+			if(routing_table[i].outgoing_if==0
+				|| (routing_table[i].hop_cnt==ntohl(hop_cnt)+1
+					&& routing_table[i].outgoing_if!=ind+3)
+				|| routing_table[i].hop_cnt>ntohl(hop_cnt)+1 || ntohl(flag ) == 1) {
+				
+				memcpy(routing_table[i].next_hop, src_mac, 6);
+				routing_table[i].outgoing_if=ind+3;
+				routing_table[i].hop_cnt=ntohl(hop_cnt)+1;
+
+				printf("This RREP gave a better route forward to destination node VM%d with hop count %d\n",i+1, routing_table[i].hop_cnt);
+				printf("Local routing table was updated\n\n");					
+			}
+			break;
+		}			
+	}
+	return 1;
 }
 
 int main(int argc, char **argv){
@@ -956,7 +993,7 @@ int main(int argc, char **argv){
 
 		struct RREP *rep = (struct RREP *)malloc(sizeof(struct RREP));
 		memcpy(rep, (void *)(frame->payload), sizeof(*rep));
-		if(update_table(rep->src_addr, rep->flag, rep->hop_cnt, frame, index) != 1)
+		if(update_table(rep->src_addr,frame->src_mac ,rep->flag, rep->hop_cnt, index) != 1)
 			err_sys("Updating error!\n");
 
 		if(rep->dst_addr != vms[currentVM-1]){	//this is not destination node
