@@ -107,7 +107,7 @@ int sendLocal(int port_cnt, struct sockaddr_un *local_addr, int odrfd, char msg[
 		}
 	}
 						
-	if(sendto(odrfd, buf, length, 0, (SA *) local_addr, sizeof(*local_addr))<0){
+	if(sendto(odrfd, buf, length, 0, (struct sockaddr *) local_addr, sizeof(*local_addr))<0){
 		err_sys("Sending error!\n");
 		return 0;
 	}
@@ -184,7 +184,7 @@ int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *
 
 	memcpy((void *)(frame->payload), (void *)packet, sizeof(*packet));
 	temp_index = routing_table[n].outgoing_if-3;
-	if(sendto(interfaceFDs[temp_index], frame, sizeof(*frame), 0, (SA *) send_if_addr, sizeof(*send_if_addr))<0) //debug 3
+	if(sendto(interfaceFDs[temp_index], frame, sizeof(*frame), 0, (struct sockaddr *) send_if_addr, sizeof(*send_if_addr))<0) //debug 3
 		err_sys("Sending error!\n");
 	else
 		printf("ODR at node vm%d: %s, sending frame, src:vm%d dest:%s\n\n", currentVM, src_addr, currentVM, dst_addr); //debug 4
@@ -287,15 +287,15 @@ int main(int argc, char **argv){
 		}
 
 		printf("\n         interface index = %d\n\n", hwa->if_index);
-
+		bzero(&interfaces[interfaceNumber], sizeof(struct sockaddr_ll));
 		interfaces[interfaceNumber].sll_family=PF_PACKET;
 		interfaces[interfaceNumber].sll_protocol=htons(PROTOCOL_NO);
 		interfaces[interfaceNumber].sll_ifindex=hwa->if_index;
-		memcpy(interfaces[interfaceNumber].sll_addr, hwa->if_haddr, ETH_ALEN);
 		
 		//Create a PF_PACKET socket for every interface
 		interfaceFDs[interfaceNumber]=Socket(PF_PACKET,SOCK_RAW,htons(PROTOCOL_NO));  //set the value in header file ?
-		Bind(interfaceFDs[interfaceNumber], (SA *) &interfaces[interfaceNumber], sizeof(SA*));
+		printf("%d\n", interfaceFDs[interfaceNumber]);
+		Bind(interfaceFDs[interfaceNumber], (struct sockaddr *) &interfaces[interfaceNumber], sizeof(struct sockaddr_ll));
 		FD_SET(interfaceFDs[interfaceNumber], &allset);
 		maxfd=interfaceFDs[interfaceNumber]>maxfd?interfaceFDs[interfaceNumber]:maxfd;
 		
@@ -317,12 +317,12 @@ int main(int argc, char **argv){
 	socklen_t len;
 	struct sockaddr_un addr1;
 	
-	sockfd = Socket(AF_LOCAL, SOCK_STREAM, 0); 
+	sockfd = Socket(AF_LOCAL, SOCK_DGRAM, 0); 
 	unlink(ODR_PATH); /* OK if this fails */
 	bzero(&addr1, sizeof(addr1));
 	addr1.sun_family = AF_LOCAL;
 	strncpy(addr1.sun_path, ODR_PATH, sizeof(addr1.sun_path) - 1); 
-	Bind(sockfd, (SA *) &addr1, SUN_LEN(&addr1));
+	Bind(sockfd, (struct sockaddr *) &addr1, SUN_LEN(&addr1));
 	printf("ODR Socket was binded with path name: %s\n",ODR_PATH);
 	FD_SET(sockfd, &allset);
 	maxfd=sockfd>maxfd?sockfd:maxfd;
@@ -368,16 +368,18 @@ int main(int argc, char **argv){
 	for (;;)
 	{
 		rset= allset;
-    	status = select(maxfd , &rset, NULL, NULL, NULL);
+    	status = select(maxfd+1 , &rset, NULL, NULL, NULL);
     	if (status == -1) {
         	if (errno == EINTR)
             	continue;
         	err_sys("select error");
     	}
-    
+    	printf("%d \n", sockfd);
     	if (FD_ISSET(sockfd,&rset)){
-    		addrlen=sizeof(addr); 
-    		Recvfrom(sockfd,buf,BUF_SIZE,0,(SA *) &addr, &addrlen);
+    		addrlen=sizeof(struct sockaddr_un); 
+    		printf("1\n");
+    		Recvfrom(sockfd, buf, BUF_SIZE,0,(struct sockaddr *) &addr, &addrlen);
+    		printf("2\n");
     		printf("received new message from local: %s , with path name: %s\n",buf,addr.sun_path);
     		sscanf(buf, "%s %s %d", message,dst_addr, &dst_port);
 
@@ -437,7 +439,7 @@ int main(int argc, char **argv){
 
 				//application payload is sent
 				if(sendto(interfaceFDs[routing_table[i].outgoing_if-3], frame, sizeof(*frame), 0, 
-						(SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+						(struct sockaddr *) &send_if_addr, sizeof(send_if_addr))<0) {
 
 					perror("ODR: Failed to send Ethernet frame throught interface socket\n");
 					exit(1);
@@ -528,7 +530,7 @@ int main(int argc, char **argv){
 
 					//application payload is sent
 					if(sendto(interfaceFDs[routing_table[i].outgoing_if-3], frame, 
-							sizeof(*frame), 0, (SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+							sizeof(*frame), 0, (struct sockaddr *) &send_if_addr, sizeof(send_if_addr))<0) {
 
 						perror("ODR: Failed to send Ethernet frame throught interface socket\n");
 						exit(1);
@@ -602,7 +604,7 @@ int main(int argc, char **argv){
   						send_if_addr.sll_ifindex=i+3;
 
 						if(sendto(interfaceFDs[i], frame, sizeof(*frame), 0, 
-								(SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+								(struct sockaddr *) &send_if_addr, sizeof(send_if_addr))<0) {
 
 							perror("ODR: Failed to send Ethernet frame through interface socket\n");
 							exit(1);
@@ -741,7 +743,7 @@ int main(int argc, char **argv){
 							send_if_addr.sll_addr[7]=0x00;
   							
 							if(sendto(interfaceFDs[index], frame, sizeof(frame), 
-								0, (SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+								0, (struct sockaddr *) &send_if_addr, sizeof(send_if_addr))<0) {
 								
 								printf("ODR: Failed to send Ethernet frame through interface socket\n");
 								exit(1);
@@ -831,7 +833,7 @@ int main(int argc, char **argv){
 							send_if_addr.sll_addr[7]=0x00;	
   							
 							if(sendto(interfaceFDs[index], frame, sizeof(frame), 
-								0, (SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+								0, (struct sockaddr *) &send_if_addr, sizeof(send_if_addr))<0) {
 								
 								printf("cannot send prep back\n");
 								exit(1);
@@ -904,7 +906,7 @@ int main(int argc, char **argv){
 								send_if_addr.sll_ifindex=i+3;
 
 								if(sendto(interfaceFDs[i], frame, sizeof(frame), 
-										0, (SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+										0, (struct sockaddr *) &send_if_addr, sizeof(send_if_addr))<0) {
 									
 										printf("cannot send preq\n");
 										exit(1);
@@ -968,7 +970,7 @@ int main(int argc, char **argv){
 								send_if_addr.sll_ifindex = i+3;
 
 								if(sendto(interfaceFDs[i], frame, sizeof(*frame), 
-									0, (SA *) &send_if_addr, sizeof(send_if_addr))<0) {
+									0, (struct sockaddr *) &send_if_addr, sizeof(send_if_addr))<0) {
 									
 									printf("cannot send RReq\n");
 									exit(1);

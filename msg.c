@@ -9,7 +9,7 @@ int msg_send(int sockfd, char *dest_addr, int dest_port, char *msg, int flag) {
     struct sockaddr_un addr;
     bzero(&addr, sizeof(struct sockaddr_un));
     addr.sun_family = AF_LOCAL;
-    strcpy(addr.sun_path, "odr path name");
+    strcpy(addr.sun_path, ODR_PATH);
 
     if (sendto(sockfd, dat, strlen(dat), 0, (SA *) &addr, sizeof(addr)) < 0) {
         printf("send error\n");

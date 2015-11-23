@@ -1,5 +1,18 @@
 #include "a3.h"
 
+char* vms[] = {
+	"130.245.156.21",
+	"130.245.156.22",
+	"130.245.156.23",
+	"130.245.156.24",
+	"130.245.156.25",
+	"130.245.156.26",
+	"130.245.156.27",
+	"130.245.156.28",
+	"130.245.156.29",
+	"130.245.156.20",
+};
+
 int main(int argc, char **argv){
 	struct hwa_info *hwa, *tmp;
 	struct sockaddr *sa;
@@ -78,7 +91,7 @@ int main(int argc, char **argv){
         	err_sys("Getting choice error!\n");
 
         //send request to local ODR
-		msg_send(sockfd, vms[s-1], 3000, sendBuf, 0);
+		msg_send(sockfd, vms[s-1], SERV_PORT_NO, sendBuf, 0);
         printf("\nclient at node vm %d sending request to server at vm %d \n\n", cur, s);
   	
 		//receive reply from local ODR
@@ -98,7 +111,7 @@ int main(int argc, char **argv){
             printf("client at node vm %d: timeout on response from vm %d \n\n", cur, s);
 
             //set force discovery flag
-            msg_send(sockfd, vms[s-1], 3000, sendBuf, 1);
+            msg_send(sockfd, vms[s-1], SERV_PORT_NO, sendBuf, 1);
             printf("\nclient at node vm %d sending request to server at vm %d \n\n", cur, s);
             goto RECEIVE;
         }else{
