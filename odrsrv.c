@@ -1002,7 +1002,7 @@ int main(int argc, char **argv){
 			rep->hop_cnt += 1;
 
 			//retransmit RREP
-			if(sendRREP(frame, send_if_addr, rep) != 1)
+			if(sendPacket(frame, &send_if_addr, (void *)rep, 1, rep->dst_addr, rep->src_addr) == 1)
 				err_sys("Sending error!\n");
 
 			free(rep);
@@ -1029,7 +1029,7 @@ int main(int argc, char **argv){
 
 		if(pl->dst_addr != vms[currentVM-1]){	//This is not destination node
 			printf("\nThis is not the destination node of app payload.\n\n");
-			if(sendRREP(frame, send_if_addr, pl) != 1)
+			if(sendPacket(frame, &send_if_addr, (void *)pl, 2, pl->dst_addr, pl->src_addr) == 1)
 				err_sys("Sending error!\n");
 
 			free(pl);
