@@ -1,5 +1,17 @@
 #include "a3.h"
-#include "hw_addrs.h"
+
+char* vms[] = {
+	"130.245.156.21",
+	"130.245.156.22",
+	"130.245.156.23",
+	"130.245.156.24",
+	"130.245.156.25",
+	"130.245.156.26",
+	"130.245.156.27",
+	"130.245.156.28",
+	"130.245.156.29",
+	"130.245.156.20",
+};
 
 int main(int argc, char **argv){
 	struct hwa_info *hwa, *tmp;
@@ -40,7 +52,7 @@ int main(int argc, char **argv){
 		if (!strcmp(tmp->if_name, "eth0") && tmp->ip_addr != NULL) {
 		  	sa = tmp->ip_addr;
 			for(i=0; i<10; i++) {
-				if(strcmp(vm_addr[i], Sock_ntop_host(sa, sizeof(*sa)))==0) {
+				if(strcmp(vms[i], Sock_ntop_host(sa, sizeof(*sa)))==0) {
 					cur=i+1;
 					break;
 				}
@@ -50,7 +62,7 @@ int main(int argc, char **argv){
 	}	
 	printf("Current VM: %d\n", cur);
 
-	tempfile = "tmpfXXXXXX";
+	strcpy(tempfile, "fnameXXXXXX");
 
 	//get unique temp filename
 	if(mkstemp(tempfile)<0)
@@ -61,7 +73,7 @@ int main(int argc, char **argv){
 
 	bzero(&client_addr, sizeof(client_addr));
 	client_addr.sun_family=AF_LOCAL;
-	client_addr.sun_path = tempfile;
+	strcpy(client_addr.sun_path, tempfile);
 	printf("\nSun path is %s \n\n", client_addr.sun_path);
 
 	//create UNIX domain socket

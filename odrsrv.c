@@ -1,5 +1,3 @@
-#include "hw_addrs.h"
-#include "API.h"
 #include "a3.h"
 
 struct routing_entry {
@@ -13,8 +11,8 @@ struct routing_entry {
 //Ethernet frame
 struct eth_frame {
 	int type;
-	unsigned char dst_mac[ETH_ALEN];
-	unsigned char src_mac[ETH_ALEN];
+	unsigned char dst_mac[6];
+	unsigned char src_mac[6];
 	unsigned short protocol_no;
 	char payload[PAYLOAD_LEN];
 };
@@ -68,7 +66,8 @@ int sendLocal(int port_cnt, struct sockaddr_un *local_addr, int odrfd, char msg[
 	}
 
 	//find the local client the RREP is for
-	for(int i=0; i <= port_cnt; i++) {		
+	int i;
+	for(i = 0; i <= port_cnt; i++) {		
 		if(port_table[i].port == (dst_port)) {
 			local_addr->sun_path = port_table[i].sun_path;
 			break;
@@ -89,10 +88,10 @@ int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *
 	int temp_index = 0;
 	bzero(frame, sizeof(struct eth_frame));
 
-	frame->protocol_no = PROTO;
+	frame->protocol_no = PROTOCOL_NO;
 	frame->type = type;
-
-	for(int n=0; n<10; n++) {
+	int n;
+	for(n = 0; n < 10; n++) {
 		if(dst_addr == routing_table[n].dst_addr) {
 			memcpy(frame->dst_mac, routing_table[n].next_hop, ETH_ALEN);
 			temp_index = routing_table[n].outgoing_if-3;
@@ -104,7 +103,7 @@ int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *
 	bzero(send_if_addr, sizeof(struct sockaddr_ll));
 
 	send_if_addr->sll_family = PF_PACKET;
-	send_if_addr->sll_protocol = PROTO;
+	send_if_addr->sll_protocol = PROTOCOL_NO;
 	send_if_addr->sll_halen = ETH_ALEN;
 	send_if_addr->sll_addr[6] = 0x00;	//not used
 	send_if_addr->sll_addr[7] = 0x00;	//not used
@@ -144,8 +143,8 @@ int sendPacket(struct eth_frame *frame, struct sockaddr_ll *send_if_addr, void *
 	for(n=0; n<10; n++){
 		if(dst_addr == routing_table[n].dst_addr) {
 			temp_index = routing_table[n].outgoing_if;
-			send_if_addr.sll_addr = frame->dst_mac;
-			send_if_addr.sll_ifindex=temp_index;
+			send_if_addr->sll_addr = frame->dst_mac;
+			send_if_addr->sll_ifindex=temp_index;
 			break;
 		}
 	}
@@ -235,12 +234,12 @@ int main(int argc, char **argv){
 		printf("\n         interface index = %d\n\n", hwa->if_index);
 
 		interfaces[interfaceNumber].sll_family=PF_PACKET;
-		interfaces[interfaceNumber].sll_protocol=htons(PROTOCOL_VALUE);
+		interfaces[interfaceNumber].sll_protocol=htons(PROTOCOL_NOCOL_VALUE);
 		interfaces[interfaceNumber].sll_ifindex=hwa->if_index;
 		memcpy(interfaces[interfaceNumber].sll_addr, hwa->if_haddr, ETH_ALEN);
 		
 		//Create a PF_PACKET socket for every interface
-		interfaceFDs[interfaceNumber]=Socket(PF_PACKET,SOCK_RAW,htons(PROTOCOL_VALUE));  //set the value in header file ?
+		interfaceFDs[interfaceNumber]=Socket(PF_PACKET,SOCK_RAW,htons(PROTOCOL_NOCOL_VALUE));  //set the value in header file ?
 		Bind(interfaceFDs[interfaceNumber], (SA *) &interfaces[interfaceNumber], sizeof(SA*));
 		FD_SET(interfaceFDs[interfaceNumber], &allset);
 		maxfd=interfaceFDs[interfaceNumber]>maxfd?interfaceFDs[interfaceNumber]:maxfd;
@@ -313,7 +312,7 @@ int main(int argc, char **argv){
 				//application payload header
 				memcpy(header->dst_mac, routing_table[i].next_hop, ETH_ALEN);
 				memcpy(header->src_mac, if_addr[routing_table[i].outgoing_if-3].sll_addr, ETH_ALEN);
-				header->proto=htons(PROTO);
+				header->proto=htons(PROTOCOL_NO);
 				header->type=htonl(2);
 
 				//application payload ODR protocol message
@@ -338,7 +337,7 @@ int main(int argc, char **argv){
 
 				bzero(&send_if_addr, sizeof(struct sockaddr_ll));
 				send_if_addr.sll_family=PF_PACKET;
-				send_if_addr.sll_protocol=htons(PROTO);
+				send_if_addr.sll_protocol=htons(PROTOCOL_NO);
 				send_if_addr.sll_ifindex=routing_table[number].outgoing_if;
 				send_if_addr.sll_halen=ETH_ALEN;
 				memcpy(send_if_addr.sll_addr, routing_table[number].next_hop, ETH_ALEN);
@@ -371,17 +370,17 @@ int main(int argc, char **argv){
     		}
     		else
     		{	//local client
-
+    			return 0;
     		}
 
     	}	
     
-	}
+	
 
 
 	/*------------- J -------------*/
-			for(index=0; index<if_cnt; index++) {
-
+	for(index=0; index<if_cnt; index++) {
+			int i;
 			//RRQ, RRP, or payload received from one of the interface socket
 			if(FD_ISSET(if_fd[index], &rset)) {
 			
@@ -399,7 +398,7 @@ int main(int argc, char **argv){
 				printf("receive frame of type %d from ", ntohl(frame->protocol_no));
 				//print mac address
 				ptr=recv_mac;
-				for (int i = 0; i < 6; ++i)
+				for (i = 0; i < 6; ++i)
 				{
 					printf("%02x%s", *ptr++ & 0xff);
 					if (i < 5){
@@ -425,7 +424,7 @@ int main(int argc, char **argv){
 					int updateFlag=0;
 					
 					//add or update 'reverse' path to source node in routing table
-					for(int i=0; i<10; i++) {
+					for(i=0; i<10; i++) {
 						if(strcmp(req->src_addr, routing_table[i].dst_addr)==0) {
 							//new route to source is more efficient
 							if(ntohl(req->flag)==1 || routing_table[i].outgoing_if==0 
@@ -459,7 +458,7 @@ int main(int argc, char **argv){
 							//RREP frame
 							memcpy(frame->dst_mac, recv_mac, 6);
 							memcpy(frame->src_mac, if_addr[routing_table[ind].outgoing_if-3].sll_addr, ETH_ALEN);
-							frame->protocol_no=htons(PROTOCOL_NO);
+							frame->protocol_no=htons(PROTOCOL_NOCOL_NO);
 							frame->type=htonl(1);
 							
 							//RREP ODR protocal message
@@ -476,7 +475,7 @@ int main(int argc, char **argv){
 							//RREP Ethernet frame
   							memcpy((void *) frame->payload, (void *) reply, sizeof(*reply));
   							ptr=frame->dst_mac;
-							for (int i = 0; i < 6; ++i)
+							for (i = 0; i < 6; ++i)
 							{
 								printf("%02x%s", *ptr++ & 0xff);
 								if (i < 5){
@@ -489,7 +488,7 @@ int main(int argc, char **argv){
   						
   							bzero(&send_if_addr, sizeof(struct sockaddr_ll));
 							send_if_addr.sll_family=PF_PACKET;
-							send_if_addr.sll_protocol=htons(PROTOCOL_NO);
+							send_if_addr.sll_protocol=htons(PROTOCOL_NOCOL_NO);
 							send_if_addr.sll_ifindex=index+3;
 							send_if_addr.sll_halen=ETH_ALEN;
   							memcpy(send_if_addr.sll_addr, header->dst_mac, ETH_ALEN);
@@ -505,7 +504,7 @@ int main(int argc, char **argv){
 							
 							printf("\nODR at node VM%d sent Ethernet frame, source VM%d, destination ", node, node);
 							ptr=send_if_addr.sll_addr;
-							for (int i = 0; i < 6; ++i)
+							for (i = 0; i < 6; ++i)
 							{
 								printf("%02x%s", *ptr++ & 0xff);
 								if (i < 5){
@@ -528,7 +527,7 @@ int main(int argc, char **argv){
 					//1122 midnight
 					int routeFound = 0;
 					//check whether this node has route information to destination node
-					for(int i =0; i<10; i++) {
+					for(i =0; i<10; i++) {
 						if(strcmp(req->dst_addr, routing_table[i].dst_addr)==0) {
 							if(routing_table[i].outgoing_if!=0 && ntohl(req->discovery)==0) {
 								routeFound = 1;
@@ -550,7 +549,7 @@ int main(int argc, char **argv){
 							
 							memcpy(frame->dst_mac, recv_mac, ETH_ALEN);
 							memcpy(frame->src_mac, if_addr[routing_table[ind].outgoing_if-3].sll_addr, ETH_ALEN);
-							frame->protocol_no=htons(PROTOCOL_NO);
+							frame->protocol_no=htons(PROTOCOL_NOCOL_NO);
 							frame->type=htonl(1);
 							
 							//prepare RREP
@@ -563,7 +562,7 @@ int main(int argc, char **argv){
 							//RREP Ethernet frame
   							memcpy((void *) frame->payload, (void *) reply, sizeof(*reply));
   							ptr=frame->dst_mac;
-        					for (int i = 0; i < 6; ++i)
+        					for (i = 0; i < 6; ++i)
 							{
 								printf("%02x%s", *ptr++ & 0xff);
 								if (i < 5){
@@ -576,7 +575,7 @@ int main(int argc, char **argv){
   						
   							bzero(&send_if_addr, sizeof(struct sockaddr_ll));
 							send_if_addr.sll_family=PF_PACKET;
-							send_if_addr.sll_protocol=htons(PROTOCOL_NO);
+							send_if_addr.sll_protocol=htons(PROTOCOL_NOCOL_NO);
 							send_if_addr.sll_hatype=ARPHRD_ETHER;
 							send_if_addr.sll_pkttype=PACKET_OTHERHOST;
 							send_if_addr.sll_ifindex=index+3;	
@@ -594,7 +593,7 @@ int main(int argc, char **argv){
 							
 							printf("\nODR at node VM%d sent frame, source VM%d, destination ", node, node);
 							ptr=send_if_addr.sll_addr;
-        					for (int i = 0; i < 6; ++i)
+        					for (i = 0; i < 6; ++i)
 							{
 								printf("%02x%s", *ptr++ & 0xff);
 								if (i < 5){
@@ -630,14 +629,14 @@ int main(int argc, char **argv){
 							frame->dst_mac[3]=0xff;
 							frame->dst_mac[4]=0xff;
 							frame->dst_mac[5]=0xff;
-							frame->protocol_no=htons(PROTOCOL_NO);
+							frame->protocol_no=htons(PROTOCOL_NOCOL_NO);
 							frame->type=htonl(0);
 						
 							memcpy((void *) frame->payload, req, sizeof(*req));
 					
 							bzero(&send_if_addr, sizeof(struct sockaddr_ll));
 							send_if_addr.sll_family=PF_PACKET;
-							send_if_addr.sll_protocol=htons(PROTOCOL_NO);
+							send_if_addr.sll_protocol=htons(PROTOCOL_NOCOL_NO);
 							send_if_addr.sll_halen=ETH_ALEN;
   							send_if_addr.sll_addr[0]=0xff;
   							send_if_addr.sll_addr[1]=0xff;
@@ -649,7 +648,7 @@ int main(int argc, char **argv){
 							send_if_addr.sll_addr[7]=0x00;
 							
 							//flooding (since have a more efficnent path)
-							for(int i = 0; i < if_cnt; i++) {
+							for(i = 0; i < if_cnt; i++) {
 								//do not send to incoming interface					
 								if(i == index){
 									continue;
@@ -689,7 +688,7 @@ int main(int argc, char **argv){
 							frame->dst_mac[3]=0xff;
 							frame->dst_mac[4]=0xff;
 							frame->dst_mac[5]=0xff;
-							frame->protocol_no=htons(PROTOCOL_NO);
+							frame->protocol_no=htons(PROTOCOL_NOCOL_NO);
 							frame->type=htonl(0);
 							
 							//hop count plus one
@@ -699,7 +698,7 @@ int main(int argc, char **argv){
 						
 							bzero(&send_if_addr, sizeof(struct sockaddr_ll));
 							send_if_addr.sll_family=PF_PACKET;
-							send_if_addr.sll_protocol=htons(PROTOCOL_NO);
+							send_if_addr.sll_protocol=htons(PROTOCOL_NOCOL_NO);
 							send_if_addr.sll_hatype=ARPHRD_ETHER;
 							send_if_addr.sll_pkttype=PACKET_BROADCAST;
 							send_if_addr.sll_halen=ETH_ALEN;
@@ -713,7 +712,7 @@ int main(int argc, char **argv){
 							send_if_addr.sll_addr[7]=0x00;
 							
 							//flooding, since no rotue was found
-							for(int i = 0; i < if_cnt; i++) {
+							for(i = 0; i < if_cnt; i++) {
 						
 								if(i == index) continue;
 								
@@ -743,7 +742,7 @@ int main(int argc, char **argv){
 	/*------------- J -------------*/
 
 	/*------------- SOU -------------*/
-	if(frame->type == 1) {	//RREP received
+	else if(frame->type == 1) {	//RREP received
 		printf("\n This is a RREP ethernet frame.\n\n");
 
 		struct RREP *rep = (struct RREP *)malloc(sizeof(struct RREP));
@@ -799,6 +798,9 @@ int main(int argc, char **argv){
 	}
 
 	free(frame);
+}
+}
+}
 	/*------------- SOU -------------*/
-	exit(0)
+	exit(0);
 }

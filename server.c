@@ -1,5 +1,18 @@
 #include "a3.h"
 
+char* vms[] = {
+	"130.245.156.21",
+	"130.245.156.22",
+	"130.245.156.23",
+	"130.245.156.24",
+	"130.245.156.25",
+	"130.245.156.26",
+	"130.245.156.27",
+	"130.245.156.28",
+	"130.245.156.29",
+	"130.245.156.20",
+};
+
 int main(int argc, const char * argv[]) {
 	printf("Server running\n");
 
@@ -7,7 +20,7 @@ int main(int argc, const char * argv[]) {
     struct sockaddr *sa;
 	int sockfd;
 	struct sockaddr_un srvaddr;
-	if((hwa=get_hw_addrs())==NULL) {
+	if((hwa = get_hw_addrs())==NULL) {
 		printf("get_hw_addrs error\n");
 		exit(1);
 	}
@@ -33,7 +46,7 @@ int main(int argc, const char * argv[]) {
 	}
 	bzero(&srvaddr, sizeof(srvaddr));
 	srvaddr.sun_family=AF_LOCAL;
-	strcpy(srvaddr.sun_path, SERV_ADDR);
+	strcpy(srvaddr.sun_path, SERV_PATH);
     unlink(srvaddr.sun_path);
 	if(bind(sockfd, (SA *) &srvaddr, sizeof(srvaddr))<0) {
 		printf("bind socket error\n");
@@ -57,7 +70,7 @@ int main(int argc, const char * argv[]) {
 		printf("Server at VM%d received client msg from VM%d\n", cur, recv);
 		tv=time(NULL);       
         snprintf(sendBuf, sizeof(sendBuf), "%.24s\r\n", ctime(&tv));
-		msg_send(sockfd, vm_addr[recv-1], src_port, sendBuf, 0);
+		msg_send(sockfd, vms[recv-1], src_port, sendBuf, 0);
 		printf("Reply sent from VM%d to VM%d\n", cur, recv);
 	}
 	return 0; 

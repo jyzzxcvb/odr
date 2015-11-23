@@ -1,13 +1,17 @@
-#include    "unp.h"
-#include    <sys/socket.h>
+#include "unp.h"
+#include <sys/socket.h>
 #include <time.h>
+#include "hw_addrs.h"
+#include <linux/if_arp.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
 
 #define MSG_SIZE 1000
 #define SERV_PATH "serv_addr"
-#define SERV_PORT 5000
+#define SERV_PORT_NO 5000
 
 #define ODR_PATH "odr_addr"
-#define ODR_PORT 5050
+#define ODR_PORT_NO 5050
 
 #define PROTOCOL_NO 0xaacd
 #define ADDR_LEN 16
@@ -16,8 +20,9 @@
 //抄的
 struct interfaceList{
 	int idx;
-	char ifaceName[STR_SIZE];
-	char ifaddr[IP_SIZE];
-	char haddr[MAC_SIZE];
+	char ifaceName[120];
+	char ifaddr[16];
+	char haddr[6];
 	struct interfaceList *next;
 };
+
