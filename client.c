@@ -23,7 +23,7 @@ int main(int argc, char **argv){
 	int flag;
 	int src_port;
 	char tempfile[MAXLINE];
-	char sendBuf[MSG_SIZE]="Hello!";
+	char sendBuf[MSG_SIZE]="hi";
 	char recBuf[MSG_SIZE];
 	char src_addr[16];
 	char buf[MAXLINE];

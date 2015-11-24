@@ -639,11 +639,13 @@ int main(int argc, char **argv){
 				struct eth_frame *frame=(struct eth_frame *) malloc(sizeof(struct eth_frame));	
 				
 				//!!!!can't receive!!!!
+				printf("===%d+%d===\n", sizeof(interfaceFDs[index]), sizeof(struct eth_frame));
 				if(recvfrom(interfaceFDs[index], frame, sizeof(*frame), 0, NULL, NULL)<0) {
-
+					printf("bbb\n");
 					perror("ODR: Failed to receive Ethernet frame througth interface socket\n");
 					exit(1);
 				}
+				printf("ccc\n");
 
 				memcpy(recv_mac, frame->src_mac, 6);
 				printf("receive frame of type %d from ", ntohl(frame->protocol_no));
@@ -1018,7 +1020,7 @@ int main(int argc, char **argv){
 
 						printf("\nThis is the destination node of RREP.\n\n");
 
-						char msg[7] = "HELLO!\0";
+						char msg[3] = "hi";
 					//	int port = 3000;
 						if(sendLocal(port_cnt,&addr, sockfd, msg, SERV_PORT_NO, rep->src_addr, rep->dst_port) != 1)
 							err_sys("Sending error!\n");
