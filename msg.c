@@ -3,7 +3,7 @@
 int msg_send(int sockfd, char *dest_addr, int dest_port, char *msg, int flag) {
     char dat[MSG_SIZE];
 
-    sprintf(dat, "%s;%d;%d;%s", dest_addr, dest_port, flag, msg);
+    sprintf(dat, "%s %d %d %s", dest_addr, dest_port, flag, msg);
     printf("\nSending Stream : %s", dat);
 
     struct sockaddr_un addr;
@@ -12,7 +12,7 @@ int msg_send(int sockfd, char *dest_addr, int dest_port, char *msg, int flag) {
     strcpy(addr.sun_path, ODR_PATH);
 
     if (sendto(sockfd, dat, strlen(dat), 0, (SA *) &addr, sizeof(addr)) < 0) {
-        printf("send error\n");
+        printf("send error %d\n", errno);
         exit(1);
     }
     printf("sent  message\n");

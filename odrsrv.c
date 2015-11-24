@@ -349,8 +349,8 @@ int main(int argc, char **argv){
 
 	/*------------- Server Starts -------------*/
 	int status;
-	char buf[BUF_SIZE];
-	char message[BUF_SIZE];
+	char buf[BUF_SIZE-1];
+	char message[BUF_SIZE-1];
 	struct sockaddr_un addr;
 	socklen_t addrlen;
 	bzero(&addr, sizeof(addr));
@@ -377,11 +377,11 @@ int main(int argc, char **argv){
     	printf("%d \n", sockfd);
     	if (FD_ISSET(sockfd,&rset)){
     		addrlen=sizeof(struct sockaddr_un); 
-    		printf("1\n");
+    	//	printf("1\n");
     		Recvfrom(sockfd, buf, BUF_SIZE,0,(struct sockaddr *) &addr, &addrlen);
-    		printf("2\n");
+    	//	printf("2\n");
     		printf("received new message from local: %s , with path name: %s\n",buf,addr.sun_path);
-    		sscanf(buf, "%s %s %d", message,dst_addr, &dst_port);
+    		sscanf(buf, "%s %d %d %s", dst_addr, &dst_port, &flag, message);
 
     			for(j=0; j<=port_cnt; j++) {
 
@@ -570,7 +570,9 @@ int main(int argc, char **argv){
 					frame->protocol_no=htons(PROTOCOL_NO);
 					frame->type=htonl(0);
 
+
 					//RREQ ODR protocol message
+					//printf("===%s===\n", vms[currentVM-1]);
 					strcpy(RRQ->src_addr, vms[currentVM-1]);
 					strcpy(RRQ->dst_addr, dst_addr);
 					RRQ->src_port=htonl(port_table[j].port);
@@ -621,6 +623,7 @@ int main(int argc, char **argv){
     		}
 
     	}	
+
     
 	
     	int index;
@@ -630,7 +633,7 @@ int main(int argc, char **argv){
 			int i;
 			//RRQ, RRP, or payload received from one of the interface socket
 			if(FD_ISSET(interfaceFDs[index], &rset)) {
-			
+				printf("begin send\n");
 				printf("New Ethernet frame was received from interface %d\n", index+3);
 				struct eth_frame *frame=(struct eth_frame *) malloc(sizeof(struct eth_frame));	
 				
@@ -662,7 +665,7 @@ int main(int argc, char **argv){
         		} while(--no>0);*/
 
         		//RREQ received				
-				if(ntohl(frame->type)==0) {				
+				if(ntohl(frame->type)==0) {
 					printf("Received new RReq msg\n");
 					struct RREQ *req=(struct RREQ *) malloc(sizeof(struct RREQ));
 					memcpy((void *) req, (void *) (frame->payload), sizeof(*req));
@@ -784,13 +787,13 @@ int main(int argc, char **argv){
 					}
 												
 					//has route to destination
-					if(routeFound) {
+					if(routeFound){
 						printf("Route to destination found\n");
 						
 						//reply is sent back
 						if((ntohl(req->RREP_flag)==0 && (routing_table[ind].broadcast_id<ntohl(req->broadcast_id) ))
 							|| ((routing_table[ind].broadcast_id==ntohl(req->broadcast_id) && updateFlag==1))) {
-					
+
 							struct RREP *reply=(struct RREP *) malloc(sizeof(struct RREP));
 						
 							bzero(frame, sizeof(struct eth_frame));
@@ -863,7 +866,7 @@ int main(int argc, char **argv){
 						if(updateFlag==1) {
 						
 							printf("\nFlooding preq to allow updates in other nodes\n");
-						
+							
 							req->RREP_flag=htonl(1);
 							//hop count plus one
 							req->hop_cnt=htonl(ntohl(req->hop_cnt)+1);
@@ -918,7 +921,7 @@ int main(int argc, char **argv){
 										req->src_addr, req->dst_addr);
 							}
 						}
-					}	
+					}
 					//current node does not have route information to destination node
 					else {
 						printf("Current does not have route to destination\n");
@@ -1014,9 +1017,9 @@ int main(int argc, char **argv){
 
 			printf("\nThis is the destination node of RREP.\n\n");
 
-			char msg[7] = "HELLO!";
-			int port = 3000;
-			if(sendLocal(port_cnt,&addr, sockfd, msg, port, rep->src_addr, rep->dst_port) != 1)
+			char msg[7] = "HELLO!\0";
+		//	int port = 3000;
+			if(sendLocal(port_cnt,&addr, sockfd, msg, SERV_PORT_NO, rep->src_addr, rep->dst_port) != 1)
 				err_sys("Sending error!\n");
 
 			printf("RREP has been sent to local client\n");
