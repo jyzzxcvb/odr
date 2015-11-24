@@ -375,7 +375,7 @@ int main(int argc, char **argv){
         	err_sys("select error");
     	}
     	printf("%d \n", sockfd);
-    	if (FD_ISSET(sockfd,&rset)){
+    	if (FD_ISSET(sockfd,&rset) > 0){
     		addrlen=sizeof(struct sockaddr_un); 
     	//	printf("1\n");
     		Recvfrom(sockfd, buf, BUF_SIZE,0,(struct sockaddr *) &addr, &addrlen);
@@ -632,12 +632,13 @@ int main(int argc, char **argv){
 	for(index=0; index<interfaceNumber; index++) {
 			int i;
 			//RRQ, RRP, or payload received from one of the interface socket
-			if(FD_ISSET(interfaceFDs[index], &rset)) {
-				printf("begin send\n");
+			//FD_ZERO(&rset);
+			if(FD_ISSET(interfaceFDs[index], &allset) > 0) {
+				//printf("begin send\n");
 				printf("New Ethernet frame was received from interface %d\n", index+3);
 				struct eth_frame *frame=(struct eth_frame *) malloc(sizeof(struct eth_frame));	
 				
-
+				//!!!!can't receive!!!!
 				if(recvfrom(interfaceFDs[index], frame, sizeof(*frame), 0, NULL, NULL)<0) {
 
 					perror("ODR: Failed to receive Ethernet frame througth interface socket\n");
@@ -993,65 +994,65 @@ int main(int argc, char **argv){
 	/*------------- J -------------*/
 
 	/*------------- SOU -------------*/
-	else if(frame->type == 1) {	//RREP received
-		printf("\n This is a RREP ethernet frame.\n\n");
+				else if(frame->type == 1) {	//RREP received
+					printf("\n This is a RREP ethernet frame.\n\n");
 
-		struct RREP *rep = (struct RREP *)malloc(sizeof(struct RREP));
-		memcpy(rep, (void *)(frame->payload), sizeof(*rep));
-		if(update_table(rep->src_addr,frame->src_mac ,rep->flag, rep->hop_cnt, index) != 1)
-			err_sys("Updating error!\n");
+					struct RREP *rep = (struct RREP *)malloc(sizeof(struct RREP));
+					memcpy(rep, (void *)(frame->payload), sizeof(*rep));
+					if(update_table(rep->src_addr,frame->src_mac ,rep->flag, rep->hop_cnt, index) != 1)
+						err_sys("Updating error!\n");
 
-		if(rep->dst_addr != vms[currentVM-1]){	//this is not destination node
-			printf("\nThis is not the destination node of RREP.\n\n");
+					if(rep->dst_addr != vms[currentVM-1]){	//this is not destination node
+						printf("\nThis is not the destination node of RREP.\n\n");
 
-			rep->hop_cnt += 1;
+						rep->hop_cnt += 1;
 
-			//retransmit RREP
-			if(sendPacket(frame, &send_if_addr, (void *)rep, 1, rep->dst_addr, rep->src_addr) == 1)
-				err_sys("Sending error!\n");
+						//retransmit RREP
+						if(sendPacket(frame, &send_if_addr, (void *)rep, 1, rep->dst_addr, rep->src_addr) == 1)
+							err_sys("Sending error!\n");
 
-			free(rep);
+						free(rep);
 
 
-		}else{	//this is destination node
+					}else{	//this is destination node
 
-			printf("\nThis is the destination node of RREP.\n\n");
+						printf("\nThis is the destination node of RREP.\n\n");
 
-			char msg[7] = "HELLO!\0";
-		//	int port = 3000;
-			if(sendLocal(port_cnt,&addr, sockfd, msg, SERV_PORT_NO, rep->src_addr, rep->dst_port) != 1)
-				err_sys("Sending error!\n");
+						char msg[7] = "HELLO!\0";
+					//	int port = 3000;
+						if(sendLocal(port_cnt,&addr, sockfd, msg, SERV_PORT_NO, rep->src_addr, rep->dst_port) != 1)
+							err_sys("Sending error!\n");
 
-			printf("RREP has been sent to local client\n");
+						printf("RREP has been sent to local client\n");
 
-		}
+					}
 
-	}else{	//app payload
-		printf("\n This is a payload ethernet frame.\n\n");
+				}else{	//app payload
+					printf("\n This is a payload ethernet frame.\n\n");
 
-		struct payload *pl = (struct payload *)malloc(sizeof(struct payload));
-		memcpy(pl, (void *)(frame->payload), sizeof(*pl));
+					struct payload *pl = (struct payload *)malloc(sizeof(struct payload));
+					memcpy(pl, (void *)(frame->payload), sizeof(*pl));
 
-		if(pl->dst_addr != vms[currentVM-1]){	//This is not destination node
-			printf("\nThis is not the destination node of app payload.\n\n");
-			if(sendPacket(frame, &send_if_addr, (void *)pl, 2, pl->dst_addr, pl->src_addr) == 1)
-				err_sys("Sending error!\n");
+					if(pl->dst_addr != vms[currentVM-1]){	//This is not destination node
+						printf("\nThis is not the destination node of app payload.\n\n");
+						if(sendPacket(frame, &send_if_addr, (void *)pl, 2, pl->dst_addr, pl->src_addr) == 1)
+							err_sys("Sending error!\n");
 
-			free(pl);
-		}else{	//This is destination node
-			printf("\nThis is the destination node of app payload.\n\n");
+						free(pl);
+					}else{	//This is destination node
+						printf("\nThis is the destination node of app payload.\n\n");
 
-			if(sendLocal(port_cnt,&addr, sockfd, pl->message, pl->src_port, pl->src_addr, pl->dst_port) != 1)
-				err_sys("Sending error!\n");
+						if(sendLocal(port_cnt,&addr, sockfd, pl->message, pl->src_port, pl->src_addr, pl->dst_port) != 1)
+							err_sys("Sending error!\n");
 
-			printf("APP payload has been sent to local client\n");
+						printf("APP payload has been sent to local client\n");
+					}
+				}
+
+				free(frame);
+			}
 		}
 	}
-
-	free(frame);
-}
-}
-}
 	/*------------- SOU -------------*/
 	exit(0);
 }
