@@ -41,7 +41,7 @@ struct routing_table_row {
 des_addr[ADDR_LEN] is the address of the destination requested. next_hop[6] is the next-hop node in the form of the Ethernet address. interface is the interface index of this route. n_hops is the number of nodes to the destination. broadcast_id is the id used for broadcasting. timestamp is the used for recording last time of “reconfirmed” routing table.
 
 The structure for port table:
-struct port_entry {
+struct port_table_row {
 
 	int port;
 	char sun_path[15];
