@@ -1,0 +1,74 @@
+-------------------------
+CSE533 Assignment 3
+Group Memeber:
+Jiayao Zhang	110369592
+Xinhe Huang		108390641
+Silu Ou			110563639
+-------------------------
+
+A.
+There are 7 code files handed. "a3.h" is the header file in which we decide some definations we use in other files. "client.c" is the code file for client service and "server.c" is the code for server service. "msg.c" is the API function file we use to send and receive messages. "odrsrv.c" is the code file for ODR service. The other code files are used in ODR.
+
+B.
+In API "msg" we define two functions for receiving and sending messages used in communication. TCP/IP socket is used in this part.
+
+C.
+In client service, we use get_hw_addrs() to get the information of the current node's interfaces. Then use mkstemp() to get the unique tempfile name and unlink the tempfile before creating and sending UNIX domain socket.
+
+The msg_send() and msg_recv() functions in API are used in this part to send and receive messages. Timeout is also used for reliability.
+
+For sending request, client format a single char sequence and write it into the UNIX domain socket. This sequence will be received and processed by the local ODR.
+
+D.
+In server service, we also use get_hw_addrs() to get the information of the currents node's interface.
+
+The msg_send() and msg_recv() functions in API are also used in this part to send and receive messages. After receiving a request, server send a UNIX domain socket for responding. Then it is blocked for waiting for the responds from the client.
+
+This socket have a "well-known" sun_path name for binding. This name is designated by a "well-known" server port which is used by the time client for communication.
+
+E.
+In ODR service, we define the following structure.
+
+The structure for routing table.
+struct routing_entry {
+	char dst_addr[ADDR_LEN];	
+	unsigned char next_hop[6];	
+	int outgoing_if;
+	int hop_cnt;
+	int broadcast_id;
+	struct timeval timestamp;
+};
+dst_addr[ADDR_LEN] is the address of the destination requested. next_hop[6] is the next-hop node in the form of the Ethernet address. outgoing_if is the outgoing interface index. hop_cnt is the number of nodes to the destination. broadcast_id is the id used for broadcasting. timestamp is the used for recording last time of “reconfirmed” routing table.
+
+The structure for port table:
+struct port_entry {
+
+	int port;
+	char sun_path[15];
+};
+port is the value of the port and sun_path is the one binded.
+
+The structure for ethernet frame.
+struct frame {
+	unsigned char dst_mac[ETH_ALEN];
+	unsigned char src_mac[ETH_ALEN];
+	unsigned short protocol_no;
+	int type;
+	char src_addr[ADDR_LEN];
+	char dst_addr[ADDR_LEN];
+	int hop_cnt;
+	int flag;
+	int src_port;      
+	int broadcast_id;
+	int RREP_flag;
+	int dst_port;
+
+	int len;
+	char message[15];
+};
+dst_mac and src_mac are the mac addresses of destination and source. type is used to identify if this frame is an RREP, RREQ or an application payload. hot_cnt is the number of nodes this frame currently travels through. flag is used to identify if this frame contains an more efficient route. message[15] is the message used for sending requests and responds.
+
+We define several functions in ODR. update_table() is used once the node receives a frame and needs to update the routing table. It returns true if the routing table is updated successfully. sendLocal() is used to send application payload to the local client if it is currently at the destination node. If it is not, use sendPacket(). send_payload() is used to send RREP and RREQ. All these functions return true if the sending work is done successfully. obtainIFs() is used to obtain the information of current node's interfaces. InitRoutingTable() is used to initiate routing table of the current node. createFrame() is used to create a frame and return created one as a result. setSentAddr() is used to set the address of sending node.
+
+F.
+When you run the program, first deploy and start ODR service at all the ten vm nodes. Then start the client service at one of these nodes and choose one of the 10 nodes as a server. Start the server service at the chosen node. The client will get the time from the server.
